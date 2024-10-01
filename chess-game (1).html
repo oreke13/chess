@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="kk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Минималистік шахмат</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+        }
+        #game-container {
+            display: flex;
+            gap: 20px;
+        }
+        #chessboard {
+            width: 400px;
+            height: 400px;
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            border: 2px solid #333;
+        }
+        .square {
+            width: 50px;
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 30px;
+            cursor: pointer;
+        }
+        .white {
+            background-color: #f0d9b5;
+        }
+        .black {
+            background-color: #b58863;
+        }
+        .highlight {
+            background-color: rgba(255, 255, 0, 0.5);
+        }
+        .captured-pieces {
+            width: 100px;
+            min-height: 400px;
+            border: 1px solid #333;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .captured-pieces div {
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div class="captured-pieces" id="white-captured"></div>
+        <div id="chessboard"></div>
+        <div class="captured-pieces" id="black-captured"></div>
+    </div>
+
+    <script>
+        const chessboard = document.getElementById('chessboard');
+        const whiteCaptured = document.getElementById('white-captured');
+        const blackCaptured = document.getElementById('black-captured');
+        let selectedPiece = null;
+        let currentPlayer = 'white';
+
+        const initialBoard = [
+            ['♜', '♞', '♝', '♛', '♚', '♝', '♞', '♜'],
+            ['♟', '♟', '♟', '♟', '♟', '♟', '♟', '♟'],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['', '', '', '', '', '', '', ''],
+            ['♙', '♙', '♙', '♙', '♙', '♙', '♙', '♙'],
+            ['♖', '♘', '♗', '♕', '♔', '♗', '♘', '♖']
+        ];
+
+        function createBoard() {
+            for (let i = 0; i < 8; i++) {
+                for (let j = 0; j < 8; j++) {
+                    const square = document.createElement('div');
+                    square.className = `square ${(i + j) % 2 === 0 ? 'white' : 'black'}`;
+                    square.dataset.row = i;
+                    square.dataset.col = j;
+                    square.textContent = initialBoard[i][j];
+                    square.addEventListener('click', handleSquareClick);
+                    chessboard.appendChild(square);
+                }
+            }
+        }
+
+        function handleSquareClick(event) {
+            const clickedSquare = event.target;
+            const row = parseInt(clickedSquare.dataset.row);
+            const col = parseInt(clickedSquare.dataset.col);
+
+            if (selectedPiece) {
+                movePiece(selectedPiece, clickedSquare);
+                selectedPiece = null;
+                removeHighlights();
+            } else if (clickedSquare.textContent && isPieceOfCurrentPlayer(clickedSquare.textContent)) {
+                selectedPiece = clickedSquare;
+                highlightPossibleMoves(row, col, clickedSquare.textContent);
+            }
+        }
+
+        function isPieceOfCurrentPlayer(piece) {
+            return (currentPlayer === 'white' && piece.charCodeAt(0) >= 9812 && piece.charCodeAt(0) <= 9817) ||
+                   (currentPlayer === 'black' && piece.charCodeAt(0) >= 9818 && piece.charCodeAt(0) <= 9823);
+        }
+
+        function highlightPossibleMoves(row, col, piece) {
+            removeHighlights();
+            const moves = getPossibleMoves(row, col, piece);
+            moves.forEach(move => {
+                const square = document.querySelector(`[data-row="${move.row}"][data-col="${move.col}"]`);
+                square.classList.add('highlight');
+            });
+        }
+
+        function removeHighlights() {
+            document.querySelectorAll('.highlight').forEach(square => square.classList.remove('highlight'));
+        }
+
+        function getPossibleMoves(row, col, piece) {
+            const moves = [];
+            const isWhite = piece.charCodeAt(0) < 9818;
+
+            switch (piece) {
+                case '♙':
+                case '♟':
+                    // Пешка
+                    const direction = isWhite ? -1 : 1;
+                    if (isSquareEmpty(row + direction, col)) {
+                        moves.push({row: row + direction, col: col});
+                        if ((isWhite && row === 6) || (!isWhite && row === 1)) {
+                            if (isSquareEmpty(row + 2 * direction, col)) {
+                                moves.push({row: row + 2 * direction, col: col});
+                            }
+                        }
+                    }
+                    if (isEnemyPiece(row + direction, col - 1, isWhite)) {
+                        moves.push({row: row + direction, col: col - 1});
+                    }
+                    if (isEnemyPiece(row + direction, col + 1, isWhite)) {
+                        moves.push({row: row + direction, col: col + 1});
+                    }
+                    break;
+                case '♖':
+                case '♜':
+                    // Ладья
+                    moves.push(...getStraightMoves(row, col, isWhite));
+                    break;
+                case '♘':
+                case '♞':
+                    // Конь
+                    const knightMoves = [
+                        {row: row - 2, col: col - 1}, {row: row - 2, col: col + 1},
+                        {row: row - 1, col: col - 2}, {row: row - 1, col: col + 2},
+                        {row: row + 1, col: col - 2}, {row: row + 1, col: col + 2},
+                        {row: row + 2, col: col - 1}, {row: row + 2, col: col + 1}
+                    ];
+                    moves.push(...knightMoves.filter(move => 
+                        isValidSquare(move.row, move.col) && 
+                        (isSquareEmpty(move.row, move.col) || isEnemyPiece(move.row, move.col, isWhite))
+                    ));
+                    break;
+                case '♗':
+                case '♝':
+                    // Слон
+                    moves.push(...getDiagonalMoves(row, col, isWhite));
+                    break;
+                case '♕':
+                case '♛':
+                    // Ферзь
+                    moves.push(...getStraightMoves(row, col, isWhite));
+                    moves.push(...getDiagonalMoves(row, col, isWhite));
+                    break;
+                case '♔':
+                case '♚':
+                    // Король
+                    for (let i = -1; i <= 1; i++) {
+                        for (let j = -1; j <= 1; j++) {
+                            if (i === 0 && j === 0) continue;
+                            if (isValidSquare(row + i, col + j) && 
+                                (isSquareEmpty(row + i, col + j) || isEnemyPiece(row + i, col + j, isWhite))) {
+                                moves.push({row: row + i, col: col + j});
+                            }
+                        }
+                    }
+                    break;
+            }
+            return moves;
+        }
+
+        function getStraightMoves(row, col, isWhite) {
+            const moves = [];
+            const directions = [{row: -1, col: 0}, {row: 1, col: 0}, {row: 0, col: -1}, {row: 0, col: 1}];
+            for (const dir of directions) {
+                let newRow = row + dir.row;
+                let newCol = col + dir.col;
+                while (isValidSquare(newRow, newCol)) {
+                    if (isSquareEmpty(newRow, newCol)) {
+                        moves.push({row: newRow, col: newCol});
+                    } else if (isEnemyPiece(newRow, newCol, isWhite)) {
+                        moves.push({row: newRow, col: newCol});
+                        break;
+                    } else {
+                        break;
+                    }
+                    newRow += dir.row;
+                    newCol += dir.col;
+                }
+            }
+            return moves;
+        }
+
+        function getDiagonalMoves(row, col, isWhite) {
+            const moves = [];
+            const directions = [{row: -1, col: -1}, {row: -1, col: 1}, {row: 1, col: -1}, {row: 1, col: 1}];
+            for (const dir of directions) {
+                let newRow = row + dir.row;
+                let newCol = col + dir.col;
+                while (isValidSquare(newRow, newCol)) {
+                    if (isSquareEmpty(newRow, newCol)) {
+                        moves.push({row: newRow, col: newCol});
+                    } else if (isEnemyPiece(newRow, newCol, isWhite)) {
+                        moves.push({row: newRow, col: newCol});
+                        break;
+                    } else {
+                        break;
+                    }
+                    newRow += dir.row;
+                    newCol += dir.col;
+                }
+            }
+            return moves;
+        }
+
+        function isValidSquare(row, col) {
+            return row >= 0 && row < 8 && col >= 0 && col < 8;
+        }
+
+        function isSquareEmpty(row, col) {
+            const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            return square && square.textContent === '';
+        }
+
+        function isEnemyPiece(row, col, isWhite) {
+            const square = document.querySelector(`[data-row="${row}"][data-col="${col}"]`);
+            if (!square || square.textContent === '') return false;
+            const pieceCode = square.textContent.charCodeAt(0);
+            return isWhite ? (pieceCode >= 9818 && pieceCode <= 9823) : (pieceCode >= 9812 && pieceCode <= 9817);
+        }
+
+        function movePiece(fromSquare, toSquare) {
+            const piece = fromSquare.textContent;
+            const isValidMove = getPossibleMoves(
+                parseInt(fromSquare.dataset.row),
+                parseInt(fromSquare.dataset.col),
+                piece
+            ).some(move => move.row === parseInt(toSquare.dataset.row) && move.col === parseInt(toSquare.dataset.col));
+
+            if (isValidMove) {
+                if (toSquare.textContent) {
+                    capturePiece(toSquare.textContent);
+                }
+                toSquare.textContent = piece;
+                fromSquare.textContent = '';
+                currentPlayer = currentPlayer === 'white' ? 'black' : 'white';
+            }
+        }
+
+        function capturePiece(piece) {
+            const capturedPiece = document.createElement('div');
+            capturedPiece.textContent = piece;
+            if (piece.charCodeAt(0) >= 9812 && piece.charCodeAt(0) <= 9817) {
+                blackCaptured.appendChild(capturedPiece);
+            } else {
+                whiteCaptured.appendChild(capturedPiece);
+            }
+        }
+
+        createBoard();
+    </script>
+</body>
+</html>
